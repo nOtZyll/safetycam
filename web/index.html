@@ -107,7 +107,7 @@
             <p class="tag tag--right">[ 01 ]</p>
             <div><dt>Kelas yang dikenali</dt><dd>11</dd></div>
             <div><dt>Gambar berlabel</dt><dd>1.416</dd></div>
-            <div><dt>Parameter YOLO11n</dt><dd>2,6 jt</dd></div>
+            <div><dt>Parameter YOLO11s</dt><dd>9,4 jt</dd></div>
             <div><dt>Foto dikirim ke server</dt><dd>0</dd></div>
           </dl>
         </div>
@@ -206,6 +206,19 @@
               </div>
             </div>
 
+            <section class="log" id="log" aria-labelledby="log-title" hidden>
+              <div class="log__head">
+                <h3 id="log-title">Riwayat pelanggaran</h3>
+                <span class="mono" id="log-count">0</span>
+              </div>
+              <p class="log__empty" id="log-empty">Belum ada pelanggaran tercatat. Setiap pekerja dicatat sekali per jenis pelanggaran.</p>
+              <ol class="log__list" id="log-list"></ol>
+              <div class="log__actions">
+                <button class="btn btn--outline btn--sm" id="log-csv" type="button" disabled>Unduh CSV</button>
+                <button class="btn btn--outline btn--sm" id="log-clear" type="button" disabled>Hapus</button>
+              </div>
+            </section>
+
             <div class="control">
               <label for="conf">Sensitivitas <output id="conf-out" for="conf">Bawaan</output></label>
               <input type="range" id="conf" min="-20" max="20" step="5" value="0" autocomplete="off">
@@ -296,7 +309,7 @@
           <h2 id="how-title" class="display display--md"><span>Dari dataset</span> <span class="dim">ke browser</span></h2>
           <ol class="steps">
             <li><span>01</span><div><h3>Dataset Construction-PPE</h3><p>1.416 foto lokasi kerja berlabel kotak untuk 11 kelas, dari Ultralytics.</p></div></li>
-            <li><span>02</span><div><h3>Training YOLO11n</h3><p>Model deteksi terkecil di keluarga YOLO11, cukup ringan untuk laptop dan ponsel.</p></div></li>
+            <li><span>02</span><div><h3>Training YOLO11s</h3><p>Dipilih dari eksperimen n, s, dan m: paling baik menangkap pelanggaran, dan masih cukup ringan untuk browser.</p></div></li>
             <li><span>03</span><div><h3>Export ke ONNX</h3><p>Input 640×640, output 15 × 8.400 kandidat kotak. Bobot float16 supaya ukurannya setengah (19 MB). Penyaringan kotak (NMS) dikerjakan di JavaScript.</p></div></li>
             <li><span>04</span><div><h3>Inferensi di browser</h3><p>onnxruntime-web memakai WebGPU bila tersedia, WASM bila tidak. Semua file disimpan lokal, jadi bisa jalan tanpa internet. Gambar tidak pernah keluar dari perangkat.</p></div></li>
           </ol>

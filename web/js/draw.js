@@ -38,7 +38,7 @@ function drawTag(ctx, text, x1, y1, c, { W, unit, fontSize }) {
   ctx.fillText(text, tagX + padX, tagY + 3 * unit);
 }
 
-/** Draw each worker's box in its status color, tagged "#1 Melanggar" etc. */
+/** Draw each worker's box in its status color, tagged "#1 Melanggar" etc. (tracker id when present). */
 export function drawWorkers(ctx, workers) {
   const g = setup(ctx);
   workers.forEach((w, i) => {
@@ -49,7 +49,7 @@ export function drawWorkers(ctx, workers) {
     ctx.setLineDash([8 * g.unit, 4 * g.unit]);
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
     ctx.setLineDash([]);
-    drawTag(ctx, `#${i + 1} ${WORKER_LABEL[w.status]}`, x1, y1, c, g);
+    drawTag(ctx, `#${w.id ?? i + 1} ${WORKER_LABEL[w.status]}`, x1, y1, c, g);
   });
 }
 

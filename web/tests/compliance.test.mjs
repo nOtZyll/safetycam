@@ -65,9 +65,12 @@ test('"none" box counts as a missing vest', () => {
   assert.equal(summaryText(r), '1 dari 1 pekerja melanggar: 1 tanpa rompi.');
 });
 
-test('worn detection beats a conflicting no_* box', () => {
-  const r = assess([person(), head('helmet'), head('no_helmet'), torso('vest')], opts);
+test('worn detection beats a conflicting no_* box, which is reported as overridden', () => {
+  const noHelmet = head('no_helmet');
+  const r = assess([person(), head('helmet'), noHelmet, torso('vest')], opts);
   assert.equal(r.status, 'SAFE');
+  assert.deepEqual(r.overridden, [noHelmet]);
+  assert.deepEqual(assess([person(), torso('vest'), head('no_helmet')], opts).overridden, []);
 });
 
 test('gear is assigned to the right worker, workers numbered left to right', () => {
