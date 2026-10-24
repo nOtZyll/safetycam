@@ -1,0 +1,25 @@
+{
+  "helmet": {
+    "method": "absen",
+    "worn_conf": 0.15,
+    "min_h": 0.3
+  },
+  "vest": {
+    "method": "absen",
+    "worn_conf": 0.15,
+    "min_h": 0.0
+  },
+  "gloves": {
+    "method": "absen",
+    "worn_conf": 0.15,
+    "min_h": 0.3
+  },
+  "boots": {
+    "method": "absen",
+    "worn_conf": 0.15,
+    "min_h": 0.3
+  },
+  "goggles": {
+    "method": "detektor"
+  }
+}

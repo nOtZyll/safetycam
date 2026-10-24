@@ -1,8 +1,7 @@
 import { Detector } from './detector.js';
-import { assess, summaryText } from './compliance.js';
-import { drawDetections } from './draw.js';
+import { assess, ruleThresholds, summaryText, workerText } from './compliance.js';
+import { drawDetections, drawWorkers } from './draw.js';
 import { classInfo } from './labels.js';
-import { classThresholds } from './postprocess.js';
 
 const $ = (id) => document.getElementById(id);
 const detector = new Detector({
@@ -26,6 +25,14 @@ const state = {
 let loadPromise = null;
 const mb = (bytes) => (bytes / 1e6).toFixed(1).replace('.', ',');
 
+// Per-worker rules tuned in the notebook (section 9b). Optional: without the file every item
+// falls back to the no_* detector.
+let workerRules = {};
+const rulesPromise = fetch('model/worker_rules.json')
+  .then((res) => (res.ok ? res.json() : {}))
+  .catch(() => ({}))
+  .then((r) => { workerRules = r; });
+
 function setModelState(kind, text, fraction) {
   $('model-state').dataset.state = kind;
   $('model-text').textContent = text;
@@ -36,8 +43,10 @@ function setModelState(kind, text, fraction) {
 function ensureModel() {
   if (!loadPromise) {
     setModelState('loading', 'Memuat model…', 0);
-    loadPromise = detector
-      .load((loaded, total) => setModelState('loading', `Memuat model ${mb(loaded)} / ${mb(total)} MB`, loaded / total))
+    loadPromise = Promise.all([
+      detector.load((loaded, total) => setModelState('loading', `Memuat model ${mb(loaded)} / ${mb(total)} MB`, loaded / total)),
+      rulesPromise,
+    ])
       .then(() => setModelState('ready', `Model siap · berjalan dengan ${detector.backend}`, 1))
       .catch((err) => {
         loadPromise = null;
@@ -62,6 +71,7 @@ new IntersectionObserver((entries, obs) => {
 
 const VERDICT = {
   VIOLATION: { title: 'Pelanggaran', cls: 'verdict--violation' },
+  UNCLEAR: { title: 'Kurang jelas', cls: 'verdict--unclear' },
   SAFE: { title: 'Aman', cls: 'verdict--safe' },
   NO_WORKER: { title: 'Tidak ada pekerja', cls: 'verdict--idle' },
 };
@@ -87,16 +97,42 @@ function fillTally(list, items, emptyText) {
     : [Object.assign(document.createElement('li'), { className: 'empty-row', textContent: emptyText })]));
 }
 
+const WORKER_STATUS = { VIOLATION: 'Melanggar', UNCLEAR: 'Tidak jelas', SAFE: 'Aman' };
+
+function fillWorkers(list, workers) {
+  $('group-workers').hidden = !workers.length;
+  list.replaceChildren(...workers.map((w, i) => {
+    const li = document.createElement('li');
+    li.dataset.status = w.status;
+    const name = document.createElement('span');
+    name.textContent = `#${i + 1} ${WORKER_STATUS[w.status]}`;
+    const detail = document.createElement('span');
+    detail.textContent = workerText(w);
+    li.append(name, detail);
+    return li;
+  }));
+}
+
 function renderResult(result) {
-  const key = `${result.status}|${summaryText(result)}|${result.ppe.map((p) => p.name + p.count).join()}`;
+  const workers = result.workerList.map((w) => w.status + workerText(w)).join();
+  const key = `${result.status}|${summaryText(result)}|${result.ppe.map((p) => p.name + p.count).join()}|${workers}`;
   if (key === state.lastVerdictKey) return; // avoid re-announcing identical webcam frames
   state.lastVerdictKey = key;
 
   const v = VERDICT[result.status];
   setVerdict(v.cls, v.title, summaryText(result));
   $('breakdown').hidden = result.status === 'NO_WORKER';
+  fillWorkers($('list-workers'), result.workerList);
   fillTally($('list-violation'), result.violations, 'Tidak ada');
   fillTally($('list-ppe'), result.ppe, 'Tidak terdeteksi');
+}
+
+/** Draw boxes and update the verdict for one decoded frame or photo. */
+function showDetections(ctx, raw, dets) {
+  const result = assess(dets, { imgH: raw.srcH, rules: workerRules });
+  drawWorkers(ctx, result.workerList);
+  drawDetections(ctx, dets, { showPerson: false });
+  renderResult(result);
 }
 
 function showError(text) {
@@ -110,7 +146,7 @@ function showError(text) {
 const canvas = $('result-canvas');
 
 const decodeRaw = (raw) => detector.decode(raw, {
-  thresholds: classThresholds(detector.names, detector.baseThresholds, state.sensitivity),
+  thresholds: ruleThresholds(detector.names, detector.baseThresholds, workerRules, { offset: state.sensitivity }),
 });
 
 function redrawPhoto() {
@@ -120,8 +156,7 @@ function redrawPhoto() {
   canvas.height = state.raw.srcH;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(state.image, 0, 0);
-  drawDetections(ctx, dets);
-  renderResult(assess(dets));
+  showDetections(ctx, state.raw, dets);
   $('meta').textContent = `${Math.round(state.raw.ms)} ms · ${detector.backend} · ${dets.length} objek`;
 }
 
@@ -302,8 +337,7 @@ async function loop() {
         const dets = decodeRaw(raw);
         overlay.width = raw.srcW;
         overlay.height = raw.srcH;
-        drawDetections(overlay.getContext('2d'), dets);
-        renderResult(assess(dets));
+        showDetections(overlay.getContext('2d'), raw, dets);
 
         frames++;
         const now = performance.now();

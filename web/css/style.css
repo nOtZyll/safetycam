@@ -241,7 +241,8 @@ code { font-family: ui-monospace, monospace; font-size: .88em; background: rgba(
 .verdict__text { margin-top: 10px; font-size: .95rem; }
 .verdict--safe { background: var(--safe); border-color: var(--safe); color: var(--on-safe); }
 .verdict--violation { background: var(--violation); border-color: var(--violation); color: var(--on-violation); }
-.verdict--safe .verdict__label, .verdict--violation .verdict__label { color: inherit; opacity: .8; }
+.verdict--unclear { background: var(--orange); border-color: var(--orange); color: var(--on-orange); }
+.verdict--safe .verdict__label, .verdict--violation .verdict__label, .verdict--unclear .verdict__label { color: inherit; opacity: .8; }
 .verdict--busy { opacity: .7; }
 
 .breakdown { display: grid; gap: 18px; }
@@ -254,6 +255,11 @@ code { font-family: ui-monospace, monospace; font-size: .88em; background: rgba(
 .tally--ppe li span:first-child::before { background: var(--safe); }
 .tally--violation li span:first-child::before { background: var(--violation); }
 .tally .empty-row { color: var(--muted); }
+.tally--workers li span:first-child { flex: none; }
+.tally--workers li span:last-child { font-weight: 400; color: var(--muted); text-align: right; }
+.tally--workers li[data-status="VIOLATION"] span:first-child::before { background: var(--violation); }
+.tally--workers li[data-status="UNCLEAR"] span:first-child::before { background: var(--orange); }
+.tally--workers li[data-status="SAFE"] span:first-child::before { background: var(--safe); }
 
 .control label { display: flex; justify-content: space-between; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
 .control output { color: var(--orange); font-variant-numeric: tabular-nums; }
