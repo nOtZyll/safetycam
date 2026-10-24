@@ -1,12 +1,14 @@
 """Export best.pt to ONNX for the browser app.
 
 Writes:
-    web/model/best.onnx     model, input [1,3,640,640], output [1,4+num_classes,8400], no NMS
+    web/model/best.onnx     model, input [1,3,640,640], output [1,4+num_classes,8400], no NMS,
+                            float16 weights (see compress.py) unless --fp32
     web/model/classes.json  class names in index order
 
 Example:
     python export.py
     python export.py --weights weights/best.pt
+    python export.py --fp32                     # keep float32 weights (about twice the size)
 """
 
 import argparse
@@ -25,6 +27,7 @@ def parse_args():
     p.add_argument("--weights", default=str(ROOT / "weights" / "best.pt"))
     p.add_argument("--imgsz", type=int, default=640)
     p.add_argument("--opset", type=int, default=12)
+    p.add_argument("--fp32", action="store_true", help="skip the float16 conversion")
     return p.parse_args()
 
 
@@ -47,7 +50,13 @@ def main():
 
     WEB_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     target = WEB_MODEL_DIR / "best.onnx"
-    shutil.copy2(onnx_path, target)
+    if args.fp32:
+        shutil.copy2(onnx_path, target)
+    else:
+        import compress
+
+        compress.convert(str(onnx_path), str(target))
+        compress.compare(str(onnx_path), str(target), compress.WEB / "assets", 0.25)
 
     names = [model.names[i] for i in sorted(model.names)]
     (WEB_MODEL_DIR / "classes.json").write_text(json.dumps(names, indent=2), encoding="utf-8")
