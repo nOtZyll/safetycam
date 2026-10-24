@@ -261,6 +261,17 @@ code { font-family: ui-monospace, monospace; font-size: .88em; background: rgba(
 .tally--workers li[data-status="UNCLEAR"] span:first-child::before { background: var(--orange); }
 .tally--workers li[data-status="SAFE"] span:first-child::before { background: var(--safe); }
 
+.log__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.log__head h3 { font: 600 .72rem/1 var(--font); text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.log__head span { font-weight: 600; font-variant-numeric: tabular-nums; }
+.log__empty { font-size: .85rem; color: var(--muted); }
+.log__list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.log__list li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.log__list img { height: 48px; width: auto; max-width: 64px; object-fit: cover; flex: none; border-left: 3px solid var(--violation); }
+.log__list time { color: var(--muted); }
+.log__actions { display: flex; gap: 10px; margin-top: 12px; }
+.log__actions .btn:disabled { opacity: .4; cursor: not-allowed; }
+
 .control label { display: flex; justify-content: space-between; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; }
 .control output { color: var(--orange); font-variant-numeric: tabular-nums; }
 .control input[type="range"] { width: 100%; margin: 14px 0 8px; accent-color: var(--orange); min-height: 24px; }

@@ -1,7 +1,8 @@
 import { Detector } from './detector.js';
-import { assess, ruleThresholds, summaryText, workerText } from './compliance.js';
+import { assess, assessWorkers, missingLabel, ruleThresholds, summarize, summaryText, workerText } from './compliance.js';
 import { drawDetections, drawWorkers } from './draw.js';
 import { classInfo } from './labels.js';
+import { WorkerTracker, logToCSV } from './tracker.js';
 
 const $ = (id) => document.getElementById(id);
 const detector = new Detector({
@@ -105,7 +106,7 @@ function fillWorkers(list, workers) {
     const li = document.createElement('li');
     li.dataset.status = w.status;
     const name = document.createElement('span');
-    name.textContent = `#${i + 1} ${WORKER_STATUS[w.status]}`;
+    name.textContent = `#${w.id ?? i + 1} ${WORKER_STATUS[w.status]}`;
     const detail = document.createElement('span');
     detail.textContent = workerText(w);
     li.append(name, detail);
@@ -114,7 +115,7 @@ function fillWorkers(list, workers) {
 }
 
 function renderResult(result) {
-  const workers = result.workerList.map((w) => w.status + workerText(w)).join();
+  const workers = result.workerList.map((w) => w.id + w.status + workerText(w)).join();
   const key = `${result.status}|${summaryText(result)}|${result.ppe.map((p) => p.name + p.count).join()}|${workers}`;
   if (key === state.lastVerdictKey) return; // avoid re-announcing identical webcam frames
   state.lastVerdictKey = key;
@@ -127,13 +128,72 @@ function renderResult(result) {
   fillTally($('list-ppe'), result.ppe, 'Tidak terdeteksi');
 }
 
-/** Draw boxes and update the verdict for one decoded frame or photo. */
-function showDetections(ctx, raw, dets) {
-  const result = assess(dets, { imgH: raw.srcH, rules: workerRules });
+/** Draw boxes and update the verdict for one photo or webcam frame. */
+function showResult(ctx, dets, result) {
   drawWorkers(ctx, result.workerList);
-  drawDetections(ctx, dets, { showPerson: false });
+  // no_* boxes contradicted by worn gear on the same worker would only confuse the picture
+  drawDetections(ctx, dets.filter((d) => !result.overridden.includes(d)), { showPerson: false });
   renderResult(result);
 }
+
+/* ---------- Violation log (webcam) ---------- */
+
+const MAX_LOG = 200;
+const log = [];
+
+function thumbnail(source, box) {
+  const [x1, y1, x2, y2] = box;
+  const h = 72;
+  const w = Math.max(1, Math.round(((x2 - x1) / Math.max(1, y2 - y1)) * h));
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  c.getContext('2d').drawImage(source, x1, y1, x2 - x1, y2 - y1, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+
+function addLogEntry(event, source) {
+  log.unshift({ time: new Date(), id: event.id, items: event.items.map(missingLabel), thumb: thumbnail(source, event.box) });
+  if (log.length > MAX_LOG) log.length = MAX_LOG;
+  renderLog();
+}
+
+function renderLog() {
+  $('log-count').textContent = `${log.length}`;
+  $('log-empty').hidden = log.length > 0;
+  $('log-csv').disabled = $('log-clear').disabled = !log.length;
+  $('log-list').replaceChildren(...log.map((e) => {
+    const li = document.createElement('li');
+    const img = Object.assign(document.createElement('img'), { src: e.thumb, alt: `Pekerja #${e.id}` });
+    const text = document.createElement('span');
+    const time = Object.assign(document.createElement('time'), {
+      dateTime: e.time.toISOString(),
+      textContent: e.time.toLocaleTimeString('id-ID'),
+      className: 'mono',
+    });
+    text.append(time, ` · #${e.id} · ${e.items.join(', ').toLowerCase()}`);
+    li.append(img, text);
+    return li;
+  }));
+}
+
+$('log-csv').addEventListener('click', () => {
+  const blob = new Blob(['﻿', logToCSV([...log].reverse())], { type: 'text/csv;charset=utf-8' });
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: `safetycam-pelanggaran-${stamp}.csv`,
+  });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+$('log-clear').addEventListener('click', () => {
+  log.length = 0;
+  renderLog();
+});
 
 function showError(text) {
   state.lastVerdictKey = '';
@@ -156,7 +216,7 @@ function redrawPhoto() {
   canvas.height = state.raw.srcH;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(state.image, 0, 0);
-  showDetections(ctx, state.raw, dets);
+  showResult(ctx, dets, assess(dets, { imgH: state.raw.srcH, rules: workerRules }));
   $('meta').textContent = `${Math.round(state.raw.ms)} ms · ${detector.backend} · ${dets.length} objek`;
 }
 
@@ -181,11 +241,14 @@ async function runImage(img) {
   }
 }
 
-async function loadImage(src) {
-  const img = new Image();
-  img.src = src;
-  await img.decode();
-  return img;
+// onload instead of img.decode(): decode() never settles in a page that is not being rendered
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Gambar tidak bisa dibaca'));
+    img.src = src;
+  });
 }
 
 async function handleFile(file) {
@@ -278,6 +341,7 @@ $('conf').addEventListener('input', (e) => {
 
 const video = $('video');
 const overlay = $('overlay');
+const tracker = new WorkerTracker();
 
 async function startCam() {
   if (state.running) return;
@@ -300,6 +364,7 @@ async function startCam() {
     $('cam-stop').hidden = false;
     state.running = true;
     state.lastVerdictKey = '';
+    tracker.reset();
     loop();
   } catch (err) {
     stopCam();
@@ -337,7 +402,10 @@ async function loop() {
         const dets = decodeRaw(raw);
         overlay.width = raw.srcW;
         overlay.height = raw.srcH;
-        showDetections(overlay.getContext('2d'), raw, dets);
+        const assessed = assessWorkers(dets, { imgH: raw.srcH, rules: workerRules });
+        const { workers, events } = tracker.update(assessed.workers);
+        showResult(overlay.getContext('2d'), dets, summarize({ ...assessed, workers }, dets));
+        for (const e of events) addLogEntry(e, video);
 
         frames++;
         const now = performance.now();
@@ -377,6 +445,7 @@ function switchTab(mode) {
     $(tab.getAttribute('aria-controls')).hidden = !active;
   }
   $('samples').hidden = mode !== 'upload';
+  $('log').hidden = mode !== 'webcam';
   state.lastVerdictKey = '';
   if (mode === 'upload') {
     stopCam();

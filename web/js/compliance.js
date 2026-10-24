@@ -9,7 +9,8 @@ export const DEFAULT_REQUIRED = ['helmet', 'vest'];
 
 const MISSING_OF = Object.fromEntries(Object.entries(MISSING).map(([cls, item]) => [item, cls]));
 const itemLabel = (item) => classInfo(item).label.toLowerCase();
-const missingLabel = (item) => classInfo(MISSING_OF[item]).label;
+/** "helmet" -> "Tanpa helm". */
+export const missingLabel = (item) => classInfo(MISSING_OF[item]).label;
 
 /** Fraction of `inner` box area that lies inside `outer`. */
 function overlap(inner, outer) {
@@ -50,6 +51,7 @@ export function ruleThresholds(names, base = {}, rules = {}, { offset = 0, requi
  *   otherwise:     a no_X box (or "none" for the vest) is on them and no X box is
  * Worker status: VIOLATION (something missing), UNCLEAR (a required item neither seen nor missing,
  * e.g. small or cropped worker) or SAFE.
+ * `overridden` lists no_* boxes contradicted by a worn item on the same worker (not worth drawing).
  */
 export function assessWorkers(detections, { imgH = 0, rules = {}, required = DEFAULT_REQUIRED, minOverlap = 0.5, expandRatio = 0.1 } = {}) {
   const workers = detections
@@ -57,6 +59,7 @@ export function assessWorkers(detections, { imgH = 0, rules = {}, required = DEF
     .sort((a, b) => a.box[0] - b.box[0]) // number workers left to right
     .map((d) => ({ box: d.box, score: d.score, worn: new Set(), reported: new Set(), missing: [], unseen: [], status: '' }));
   const unassigned = [];
+  const reportedBy = [];
 
   for (const d of detections) {
     if (!PPE_ITEMS.includes(d.name) && !(d.name in MISSING)) continue;
@@ -70,9 +73,12 @@ export function assessWorkers(detections, { imgH = 0, rules = {}, required = DEF
       }
     }
     if (!best) unassigned.push(d);
-    else if (d.name in MISSING) best.reported.add(MISSING[d.name]);
-    else best.worn.add(d.name);
+    else if (d.name in MISSING) {
+      best.reported.add(MISSING[d.name]);
+      reportedBy.push([d, best]);
+    } else best.worn.add(d.name);
   }
+  const overridden = reportedBy.filter(([d, w]) => w.worn.has(MISSING[d.name])).map(([d]) => d);
 
   for (const w of workers) {
     const h = w.box[3] - w.box[1];
@@ -84,7 +90,7 @@ export function assessWorkers(detections, { imgH = 0, rules = {}, required = DEF
     }
     w.status = w.missing.length ? 'VIOLATION' : w.unseen.length ? 'UNCLEAR' : 'SAFE';
   }
-  return { workers, unassigned };
+  return { workers, unassigned, overridden };
 }
 
 function tally(items) {
@@ -103,8 +109,11 @@ function tally(items) {
  * NO_WORKER: nothing relevant detected.
  */
 export function assess(detections, options = {}) {
-  const { workers, unassigned } = assessWorkers(detections, options);
+  return summarize(assessWorkers(detections, options), detections);
+}
 
+/** Image verdict from an assessWorkers() result (whose workers may be smoothed by the tracker). */
+export function summarize({ workers, unassigned, overridden = [] }, detections) {
   const missingItems = workers.flatMap((w) => w.missing);
   for (const d of unassigned) if (d.name in MISSING) missingItems.push(MISSING[d.name]);
   const violations = tally(missingItems);
@@ -121,7 +130,7 @@ export function assess(detections, options = {}) {
   else if (workers.length || ppe.length) status = 'SAFE';
 
   const violationTotal = violations.reduce((s, v) => s + v.count, 0);
-  return { status, workers: workers.length, workerList: workers, violations, violationTotal, ppe };
+  return { status, workers: workers.length, workerList: workers, violations, violationTotal, ppe, overridden };
 }
 
 const listText = (items) => items.map(itemLabel).join(', ');

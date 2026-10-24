@@ -26,7 +26,7 @@ WEIGHTS_DIR = ROOT / "weights"
 
 def parse_args():
     p = argparse.ArgumentParser(description="Train YOLO11 for PPE detection")
-    p.add_argument("--model", default="yolo11n.pt", help="base model (yolo11n.pt / yolo11s.pt)")
+    p.add_argument("--model", default="yolo11s.pt", help="base model (yolo11n.pt / yolo11s.pt); website uses yolo11s")
     p.add_argument("--data", default="construction-ppe.yaml", help="dataset yaml")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--imgsz", type=int, default=640)
