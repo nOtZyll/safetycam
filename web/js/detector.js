@@ -1,6 +1,7 @@
 import { letterboxParams, decode } from './postprocess.js';
 
-const ORT_VERSION = '1.20.1';
+// onnxruntime-web 1.20.1 is served from vendor/ort so the site works offline.
+const ORT_WASM_DIR = new URL('../vendor/ort/', import.meta.url).href;
 
 async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
@@ -49,7 +50,7 @@ export class Detector {
   async load(onProgress) {
     const ort = window.ort;
     if (!ort) throw new Error('Library onnxruntime-web gagal dimuat.');
-    ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
+    ort.env.wasm.wasmPaths = ORT_WASM_DIR;
 
     const res = await fetch(this.classesUrl);
     if (!res.ok) throw new Error('Daftar kelas model tidak ditemukan.');

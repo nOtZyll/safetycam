@@ -16,14 +16,18 @@ Website memakai threshold per kelas (`web/model/thresholds.json`) yang disetel d
 
 1. Training: `cd training && python train.py`
 2. Evaluasi: `python evaluate.py`
-3. Export ke website: `python export.py`. Hasilnya `web/model/best.onnx`, `classes.json`, dan `metrics.json`. `thresholds.json` dibuat oleh notebook (bagian 7 dan 10).
+3. Export ke website: `python export.py`. Hasilnya `web/model/best.onnx` (bobot float16, sekitar 19 MB, lewat `compress.py`), `classes.json`, `metrics.json`, dan `worker_rules.json`. `thresholds.json` dibuat oleh notebook (bagian 7 dan 10).
 4. Jalankan website lokal: `cd web && python -m http.server 5180`, lalu buka http://localhost:5180
 5. Test logika web: `cd web && npm test`
 
 ## Deploy (Vercel)
 
 Import repo di Vercel, set **Root Directory** ke `web`, framework **Other**, tanpa build command.
-Pastikan `web/model/best.onnx` ikut di-commit (sekitar 38 MB untuk YOLO11s).
+Pastikan `web/model/best.onnx` ikut di-commit (sekitar 19 MB untuk YOLO11s float16).
+
+## Offline
+
+onnxruntime-web dan font disimpan di `web/vendor/` (lihat [web/vendor/README.md](web/vendor/README.md)), jadi website tidak butuh internet setelah dijalankan secara lokal.
 
 ## Lisensi
 
