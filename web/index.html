@@ -194,6 +194,10 @@
             </div>
 
             <div class="breakdown" id="breakdown" hidden>
+              <div class="breakdown__group" id="group-workers" hidden>
+                <h3>Per pekerja</h3>
+                <ul id="list-workers" class="tally tally--workers"></ul>
+              </div>
               <div class="breakdown__group">
                 <h3>Pelanggaran</h3>
                 <ul id="list-violation" class="tally tally--violation"></ul>
@@ -257,12 +261,12 @@
             <div class="card__body">
               <span class="card__n">03</span>
               <h3>Pekerja</h3>
-              <p>Setiap orang di foto dihitung, supaya status per gambar jelas</p>
+              <p>Setiap pekerja dinilai sendiri: aman, melanggar, atau APD-nya tidak terlihat jelas</p>
               <span class="card__swatch card__swatch--person" aria-hidden="true"></span>
             </div>
           </li>
         </ul>
-        <p class="checks__note">Rompi tidak punya label pelanggaran di dataset ini, jadi pekerja tanpa rompi belum bisa ditandai.</p>
+        <p class="checks__note">Helm dan rompi wajib. Pekerja yang cukup besar di foto tapi tidak terdeteksi memakai helm atau rompi langsung ditandai melanggar. APD lain hanya ditandai bila model melihatnya tidak dipakai.</p>
       </div>
     </section>
 

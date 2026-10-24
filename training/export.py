@@ -59,6 +59,14 @@ def main():
     else:
         print("Metrik : belum ada (jalankan evaluate.py dulu supaya muncul di website)")
 
+    # Per-worker rules come from the notebook (section 9b).
+    rules = ROOT / "results" / "notebook" / "worker_rules.json"
+    if rules.exists():
+        shutil.copy2(rules, WEB_MODEL_DIR / "worker_rules.json")
+        print(f"Aturan : {WEB_MODEL_DIR / 'worker_rules.json'}")
+    else:
+        print("Aturan : belum ada (jalankan bagian 9b notebook), website memakai detektor no_* saja")
+
     size_mb = target.stat().st_size / 1e6
     print("\n=== Export selesai ===")
     print(f"ONNX   : {target} ({size_mb:.1f} MB)")
