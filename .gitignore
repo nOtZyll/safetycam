@@ -8,3 +8,6 @@ training/weights/best_quick.pt
 *.pt
 !training/weights/best.pt
 training/weights/*.onnx
+
+# self-signed certificate made by serve_https.py
+.cert/

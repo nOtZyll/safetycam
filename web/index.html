@@ -157,6 +157,7 @@
               </div>
               <div class="cam__bar">
                 <span id="fps" aria-live="off">-</span>
+                <select class="cam__select" id="cam-select" aria-label="Pilih kamera" hidden></select>
                 <button class="btn btn--outline btn--sm" id="cam-stop" type="button" hidden>Matikan kamera</button>
               </div>
             </div>
@@ -213,6 +214,7 @@
                 <h3 id="log-title">Riwayat pelanggaran</h3>
                 <span class="mono" id="log-count">0</span>
               </div>
+              <label class="log__sound"><input type="checkbox" id="log-sound"> Bunyi dan getar saat ada pelanggaran baru</label>
               <p class="log__empty" id="log-empty">Belum ada pelanggaran tercatat. Setiap pekerja dicatat sekali per jenis pelanggaran.</p>
               <ol class="log__list" id="log-list"></ol>
               <div class="log__actions">
@@ -240,6 +242,7 @@
             </div>
 
             <p class="meta" id="meta"></p>
+            <button class="btn btn--outline btn--sm" id="save-photo" type="button" hidden>Unduh foto hasil</button>
           </aside>
         </div>
       </div>

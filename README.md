@@ -25,6 +25,17 @@ Website memakai threshold per kelas (`web/model/thresholds.json`) yang disetel d
 Import repo di Vercel, set **Root Directory** ke `web`, framework **Other**, tanpa build command.
 Pastikan `web/model/best.onnx` ikut di-commit (sekitar 19 MB untuk YOLO11s float16).
 
+## Pakai dari HP (jaringan lokal)
+
+Browser hanya mengizinkan kamera di halaman `https://` atau di `localhost`. Supaya HP bisa memakai kameranya lewat Wi-Fi yang sama dengan laptop:
+
+```bash
+pip install cryptography
+python serve_https.py
+```
+
+Script ini membuat sertifikat self-signed untuk alamat IP laptop (disimpan di `.cert/`, tidak ikut di-commit) lalu menampilkan alamat seperti `https://192.168.1.5:5443`. Buka alamat itu di HP. Browser akan memperingatkan bahwa sertifikat tidak tepercaya; pilih "Lanjutan" lalu "Lanjutkan". Kamera bisa dipakai, tapi cache offline (service worker) tidak aktif lewat sertifikat seperti ini. Kalau Windows bertanya soal firewall, izinkan untuk jaringan privat.
+
 ## Offline
 
 onnxruntime-web dan font disimpan di `web/vendor/` (lihat [web/vendor/README.md](web/vendor/README.md)), jadi website tidak butuh internet setelah dijalankan secara lokal.
