@@ -7,6 +7,8 @@
   <meta name="description" content="Deteksi helm, rompi, sarung tangan, sepatu safety, dan kacamata pada pekerja konstruksi. Model YOLO11 berjalan langsung di browser.">
   <meta name="theme-color" content="#0B0B0C">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B0B0C'/%3E%3Cpath d='M7 13V7h6M19 7h6v6M25 19v6h-6M13 25H7v-6' fill='none' stroke='%23FF5A1F' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
   <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/style.css">
   <script src="vendor/ort/ort.webgpu.min.js" defer></script>
@@ -219,6 +221,18 @@
               </div>
             </section>
 
+            <fieldset class="required" id="required">
+              <legend>APD wajib</legend>
+              <div class="required__opts">
+                <label><input type="checkbox" value="helmet"> Helm</label>
+                <label><input type="checkbox" value="vest"> Rompi</label>
+                <label><input type="checkbox" value="gloves"> Sarung tangan</label>
+                <label><input type="checkbox" value="boots"> Sepatu safety</label>
+                <label><input type="checkbox" value="goggles"> Kacamata</label>
+              </div>
+              <p class="control__hint">Pekerja yang tidak terlihat memakai APD wajib ditandai melanggar. Deteksi sarung tangan dan sepatu safety kurang akurat, jadi lebih sering keliru.</p>
+            </fieldset>
+
             <div class="control">
               <label for="conf">Sensitivitas <output id="conf-out" for="conf">Bawaan</output></label>
               <input type="range" id="conf" min="-20" max="20" step="5" value="0" autocomplete="off">
@@ -277,7 +291,7 @@
             </div>
           </li>
         </ul>
-        <p class="checks__note">Helm dan rompi wajib. Pekerja yang cukup besar di foto tapi tidak terdeteksi memakai helm atau rompi langsung ditandai melanggar. APD lain hanya ditandai bila model melihatnya tidak dipakai.</p>
+        <p class="checks__note">Secara bawaan helm dan rompi wajib; daftar APD wajib bisa diubah di panel hasil. Pekerja yang cukup besar di foto tapi tidak terdeteksi memakai APD wajib langsung ditandai melanggar. APD lain hanya ditandai bila model melihatnya tidak dipakai.</p>
       </div>
     </section>
 

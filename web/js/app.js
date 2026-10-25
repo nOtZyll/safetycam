@@ -1,10 +1,30 @@
 import { Detector } from './detector.js';
-import { assess, assessWorkers, missingLabel, ruleThresholds, summarize, summaryText, workerText } from './compliance.js';
+import {
+  DEFAULT_REQUIRED, PPE_ITEMS, assess, assessWorkers, missingLabel, ruleThresholds, summarize, summaryText, workerText,
+} from './compliance.js';
 import { drawDetections, drawWorkers } from './draw.js';
 import { classInfo } from './labels.js';
 import { WorkerTracker, logToCSV } from './tracker.js';
+import { LogStore } from './store.js';
 
 const $ = (id) => document.getElementById(id);
+
+// The required-PPE choice is a per-viewer preference, so localStorage is enough.
+const REQUIRED_KEY = 'safetycam.required';
+
+function loadRequired() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(REQUIRED_KEY));
+    if (Array.isArray(saved)) return saved.filter((i) => PPE_ITEMS.includes(i));
+  } catch { /* storage blocked or bad value */ }
+  return [...DEFAULT_REQUIRED];
+}
+
+function saveRequired(items) {
+  try {
+    localStorage.setItem(REQUIRED_KEY, JSON.stringify(items));
+  } catch { /* keep it for this page only */ }
+}
 const detector = new Detector({
   modelUrl: 'model/best.onnx',
   classesUrl: 'model/classes.json',
@@ -14,6 +34,7 @@ const detector = new Detector({
 const state = {
   mode: 'upload',
   sensitivity: 0, // shifts every per-class threshold; +0.10 = 10 points more sensitive
+  required: loadRequired(), // PPE items every worker must wear
   image: null,
   raw: null,
   stream: null,
@@ -48,7 +69,10 @@ function ensureModel() {
       detector.load((loaded, total) => setModelState('loading', `Memuat model ${mb(loaded)} / ${mb(total)} MB`, loaded / total)),
       rulesPromise,
     ])
-      .then(() => setModelState('ready', `Model siap · berjalan dengan ${detector.backend}`, 1))
+      .then(async () => {
+        setModelState('ready', `Model siap · berjalan dengan ${detector.backend}`, 1);
+        if (await offlineReady()) setModelState('ready', `Model siap · ${detector.backend} · bisa dipakai offline`, 1);
+      })
       .catch((err) => {
         loadPromise = null;
         setModelState('error', `Model gagal dimuat: ${err.message}`);
@@ -59,6 +83,25 @@ function ensureModel() {
 }
 
 $('model-retry').addEventListener('click', () => ensureModel().catch(() => {}));
+
+/* ---------- Offline (service worker, see sw.js) ---------- */
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/** True once the model and the runtime are in the service worker cache. */
+async function offlineReady() {
+  if (!('caches' in window) || !navigator.serviceWorker?.controller) return false;
+  try {
+    const files = ['model/best.onnx', 'vendor/ort/ort-wasm-simd-threaded.jsep.wasm'];
+    // the service worker stores files as they load, so give it a moment after the model is ready
+    for (let i = 0; i < 10; i++) {
+      const hits = await Promise.all(files.map((f) => caches.match(new URL(f, location.href).href)));
+      if (hits.every(Boolean)) return true;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  } catch { /* storage blocked */ }
+  return false;
+}
 
 // Start downloading as soon as the demo is near the viewport.
 new IntersectionObserver((entries, obs) => {
@@ -138,8 +181,13 @@ function showResult(ctx, dets, result) {
 
 /* ---------- Violation log (webcam) ---------- */
 
-const MAX_LOG = 200;
-const log = [];
+const MAX_LOG = 500;
+const log = []; // newest first
+const logStore = new LogStore();
+logStore.all().then((saved) => {
+  log.push(...saved);
+  renderLog();
+});
 
 function thumbnail(source, box) {
   const [x1, y1, x2, y2] = box;
@@ -153,10 +201,14 @@ function thumbnail(source, box) {
 }
 
 function addLogEntry(event, source) {
-  log.unshift({ time: new Date(), id: event.id, items: event.items.map(missingLabel), thumb: thumbnail(source, event.box) });
-  if (log.length > MAX_LOG) log.length = MAX_LOG;
+  const entry = { time: new Date(), id: event.id, items: event.items.map(missingLabel), thumb: thumbnail(source, event.box) };
+  log.unshift(entry);
+  logStore.add(entry);
+  if (log.length > MAX_LOG) logStore.remove(log.splice(MAX_LOG));
   renderLog();
 }
+
+const sameDay = (a, b) => a.toDateString() === b.toDateString();
 
 function renderLog() {
   $('log-count').textContent = `${log.length}`;
@@ -168,7 +220,10 @@ function renderLog() {
     const text = document.createElement('span');
     const time = Object.assign(document.createElement('time'), {
       dateTime: e.time.toISOString(),
-      textContent: e.time.toLocaleTimeString('id-ID'),
+      // older entries come back from storage after a refresh, so show their date too
+      textContent: sameDay(e.time, new Date())
+        ? e.time.toLocaleTimeString('id-ID')
+        : e.time.toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
       className: 'mono',
     });
     text.append(time, ` · #${e.id} · ${e.items.join(', ').toLowerCase()}`);
@@ -191,7 +246,9 @@ $('log-csv').addEventListener('click', () => {
 });
 
 $('log-clear').addEventListener('click', () => {
+  if (!window.confirm(`Hapus ${log.length} catatan pelanggaran? Ini tidak bisa dibatalkan.`)) return;
   log.length = 0;
+  logStore.clear();
   renderLog();
 });
 
@@ -206,7 +263,7 @@ function showError(text) {
 const canvas = $('result-canvas');
 
 const decodeRaw = (raw) => detector.decode(raw, {
-  thresholds: ruleThresholds(detector.names, detector.baseThresholds, workerRules, { offset: state.sensitivity }),
+  thresholds: ruleThresholds(detector.names, detector.baseThresholds, workerRules, { offset: state.sensitivity, required: state.required }),
 });
 
 function redrawPhoto() {
@@ -216,7 +273,7 @@ function redrawPhoto() {
   canvas.height = state.raw.srcH;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(state.image, 0, 0);
-  showResult(ctx, dets, assess(dets, { imgH: state.raw.srcH, rules: workerRules }));
+  showResult(ctx, dets, assess(dets, { imgH: state.raw.srcH, rules: workerRules, required: state.required }));
   $('meta').textContent = `${Math.round(state.raw.ms)} ms · ${detector.backend} · ${dets.length} objek`;
 }
 
@@ -337,6 +394,20 @@ $('conf').addEventListener('input', (e) => {
   if (state.mode === 'upload') redrawPhoto();
 });
 
+/* ---------- Required PPE ---------- */
+
+const requiredBoxes = [...document.querySelectorAll('#required input')];
+requiredBoxes.forEach((box) => {
+  box.checked = state.required.includes(box.value);
+  box.addEventListener('change', () => {
+    state.required = requiredBoxes.filter((b) => b.checked).map((b) => b.value);
+    saveRequired(state.required);
+    state.lastVerdictKey = '';
+    tracker.reset(); // old webcam history was judged against the old list
+    if (state.mode === 'upload') redrawPhoto();
+  });
+});
+
 /* ---------- Webcam mode ---------- */
 
 const video = $('video');
@@ -402,7 +473,7 @@ async function loop() {
         const dets = decodeRaw(raw);
         overlay.width = raw.srcW;
         overlay.height = raw.srcH;
-        const assessed = assessWorkers(dets, { imgH: raw.srcH, rules: workerRules });
+        const assessed = assessWorkers(dets, { imgH: raw.srcH, rules: workerRules, required: state.required });
         const { workers, events } = tracker.update(assessed.workers);
         showResult(overlay.getContext('2d'), dets, summarize({ ...assessed, workers }, dets));
         for (const e of events) addLogEntry(e, video);

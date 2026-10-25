@@ -12,7 +12,9 @@ Example:
 """
 
 import argparse
+import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -57,6 +59,14 @@ def main():
 
         compress.convert(str(onnx_path), str(target))
         compress.compare(str(onnx_path), str(target), compress.WEB / "assets", 0.25)
+
+    # The service worker caches the model; a new VERSION makes browsers fetch the new file.
+    sw = WEB_MODEL_DIR.parent / "sw.js"
+    if sw.exists():
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()[:10]
+        text = re.sub(r"const VERSION = '[^']*';", f"const VERSION = 'model-{digest}';", sw.read_text(encoding="utf-8"))
+        sw.write_text(text, encoding="utf-8")
+        print(f"Cache  : sw.js VERSION = model-{digest}")
 
     names = [model.names[i] for i in sorted(model.names)]
     (WEB_MODEL_DIR / "classes.json").write_text(json.dumps(names, indent=2), encoding="utf-8")
