@@ -100,6 +100,30 @@ test('PPE without any person box is safe; nothing at all is no worker', () => {
   assert.equal(assess([], opts).status, 'NO_WORKER');
 });
 
+test('required list is configurable', () => {
+  const dets = [person(), head('helmet'), torso('vest')];
+  // gloves required and judged by absence: bare hands on a tall worker are a violation
+  const g = assess(dets, { ...opts, required: ['helmet', 'vest', 'gloves'] });
+  assert.equal(g.status, 'VIOLATION');
+  assert.deepEqual(g.workerList[0].missing, ['gloves']);
+  // goggles use the detector rule: not seen and not reported missing means unclear
+  const k = assess(dets, { ...opts, required: ['helmet', 'goggles'] });
+  assert.equal(k.status, 'UNCLEAR');
+  assert.deepEqual(k.workerList[0].unseen, ['goggles']);
+  // nothing required: a bare-headed worker is only flagged by a no_* box
+  assert.equal(assess([person()], { ...opts, required: [] }).status, 'SAFE');
+  assert.equal(assess([person(), head('no_helmet')], { ...opts, required: [] }).status, 'VIOLATION');
+});
+
+test('ruleThresholds lowers the worn threshold only for required absence items', () => {
+  const names = ['helmet', 'gloves'];
+  const base = { helmet: 0.544, gloves: 0.4 };
+  const thr = (required) => ruleThresholds(names, base, RULES, { required }).map((v) => +v.toFixed(3));
+  assert.deepEqual(thr(['helmet']), [0.15, 0.4]);
+  assert.deepEqual(thr(['helmet', 'gloves']), [0.15, 0.15]);
+  assert.deepEqual(thr([]), [0.544, 0.4]);
+});
+
 test('ruleThresholds uses worn_conf for required absence items, offset moves it the other way', () => {
   const names = ['helmet', 'vest', 'gloves', 'goggles', 'no_helmet'];
   const base = { helmet: 0.544, vest: 0.4, gloves: 0.4, goggles: 0.474, no_helmet: 0.1 };

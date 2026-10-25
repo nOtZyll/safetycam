@@ -29,6 +29,12 @@ Pastikan `web/model/best.onnx` ikut di-commit (sekitar 19 MB untuk YOLO11s float
 
 onnxruntime-web dan font disimpan di `web/vendor/` (lihat [web/vendor/README.md](web/vendor/README.md)), jadi website tidak butuh internet setelah dijalankan secara lokal.
 
+Website juga PWA: `web/sw.js` (service worker) menyimpan halaman, gambar, model, dan runtime di cache browser. Setelah model sekali dimuat, website bisa dibuka dan dipakai tanpa koneksi, termasuk versi yang di-deploy, dan bisa dipasang di HP lewat menu "Tambahkan ke layar utama".
+
+- File halaman (HTML, CSS, JS, JSON) diambil dari jaringan dulu, jadi perubahan langsung terlihat saat online.
+- Model, runtime, font, dan gambar diambil dari cache dulu. `VERSION` di `sw.js` berisi hash `best.onnx` dan diperbarui otomatis oleh `export.py`, jadi model baru ikut terunduh. Kalau mengganti file di `web/vendor/` secara manual, ubah `VERSION` sendiri.
+- Riwayat pelanggaran webcam disimpan di IndexedDB browser (maksimal 500 catatan), dan pilihan APD wajib di localStorage. Keduanya hanya ada di browser itu, tidak dikirim ke mana pun.
+
 ## Lisensi
 
 Ultralytics YOLO11 dan dataset Construction-PPE berlisensi AGPL-3.0, jadi repo ini juga open source di bawah AGPL-3.0.
