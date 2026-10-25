@@ -214,6 +214,8 @@ code { font-family: ui-monospace, monospace; font-size: .88em; background: rgba(
 .cam__idle p { max-width: 36ch; }
 .cam__bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; font-size: .8rem; font-variant-numeric: tabular-nums; background: linear-gradient(transparent, rgba(11, 11, 12, .9)); }
 .cam__bar .btn { background: rgba(11, 11, 12, .8); }
+.cam__bar #fps { margin-right: auto; }
+.cam__select { min-height: 32px; max-width: 45%; padding: 4px 8px; background: rgba(11, 11, 12, .8); color: var(--text); border: 1px solid var(--line); font: inherit; }
 #panel-webcam { display: block; }
 
 .samples { margin-top: 16px; }
@@ -265,6 +267,8 @@ code { font-family: ui-monospace, monospace; font-size: .88em; background: rgba(
 .log__head h3 { font: 600 .72rem/1 var(--font); text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
 .log__head span { font-weight: 600; font-variant-numeric: tabular-nums; }
 .log__empty { font-size: .85rem; color: var(--muted); }
+.log__sound { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: .85rem; cursor: pointer; }
+.log__sound input { accent-color: var(--orange); width: 16px; height: 16px; margin: 0; }
 .log__list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
 .log__list li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
 .log__list img { height: 48px; width: auto; max-width: 64px; object-fit: cover; flex: none; border-left: 3px solid var(--violation); }

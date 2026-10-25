@@ -70,7 +70,9 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
   try {
-    const res = await fetch(request);
+    // no-cache: always revalidate with the server (a cheap 304 when unchanged). Without it the
+    // HTTP cache may hand back an old draw.js next to a new app.js and the modules don't match.
+    const res = await fetch(request, { cache: 'no-cache' });
     if (res.ok) cache.put(request, res.clone());
     return res;
   } catch (err) {

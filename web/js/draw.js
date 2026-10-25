@@ -53,6 +53,51 @@ export function drawWorkers(ctx, workers) {
   });
 }
 
+const FOOTER_COLORS = {
+  VIOLATION: COLORS.violation,
+  UNCLEAR: WORKER_COLORS.UNCLEAR,
+  SAFE: COLORS.ppe,
+  NO_WORKER: COLORS.other,
+};
+
+/**
+ * Copy of an annotated photo with a strip below it: status, summary and time stamp,
+ * so a saved picture explains itself in a report.
+ */
+export function withFooter(source, { status, title, text, stamp }) {
+  const W = source.width;
+  const unit = Math.max(1, W / 640);
+  const pad = Math.round(16 * unit);
+  const titleSize = Math.round(26 * unit);
+  const textSize = Math.round(15 * unit);
+  const band = pad * 3 + titleSize + textSize;
+
+  const out = document.createElement('canvas');
+  out.width = W;
+  out.height = source.height + band;
+  const ctx = out.getContext('2d');
+  ctx.drawImage(source, 0, 0);
+
+  const c = FOOTER_COLORS[status] ?? COLORS.other;
+  ctx.fillStyle = '#0B0B0C';
+  ctx.fillRect(0, source.height, W, band);
+  ctx.fillStyle = c.fill;
+  ctx.fillRect(0, source.height, Math.round(8 * unit), band);
+
+  ctx.textBaseline = 'top';
+  const x = pad + Math.round(8 * unit);
+  ctx.fillStyle = c.fill;
+  ctx.font = `700 ${titleSize}px "Barlow Condensed", system-ui, sans-serif`;
+  ctx.fillText(title.toUpperCase(), x, source.height + pad);
+  ctx.fillStyle = '#F3F3F1';
+  ctx.font = `500 ${textSize}px "Barlow", system-ui, sans-serif`;
+  ctx.fillText(text, x, source.height + pad * 2 + titleSize, W - x - pad);
+  ctx.fillStyle = '#A1A1A8';
+  ctx.textAlign = 'right';
+  ctx.fillText(stamp, W - pad, source.height + pad + Math.round(6 * unit));
+  return out;
+}
+
 /** Draw detections on a canvas whose pixel size equals the source image size. */
 export function drawDetections(ctx, detections, { showPerson = true } = {}) {
   const g = setup(ctx);

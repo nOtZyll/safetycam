@@ -2,7 +2,7 @@ import { Detector } from './detector.js';
 import {
   DEFAULT_REQUIRED, PPE_ITEMS, assess, assessWorkers, missingLabel, ruleThresholds, summarize, summaryText, workerText,
 } from './compliance.js';
-import { drawDetections, drawWorkers } from './draw.js';
+import { drawDetections, drawWorkers, withFooter } from './draw.js';
 import { classInfo } from './labels.js';
 import { WorkerTracker, logToCSV } from './tracker.js';
 import { LogStore } from './store.js';
@@ -37,7 +37,9 @@ const state = {
   required: loadRequired(), // PPE items every worker must wear
   image: null,
   raw: null,
+  result: null, // last photo verdict, for "Unduh foto hasil"
   stream: null,
+  cameraId: null, // chosen in the camera picker; null = rear camera by default
   running: false,
   lastVerdictKey: '',
 };
@@ -232,17 +234,21 @@ function renderLog() {
   }));
 }
 
-$('log-csv').addEventListener('click', () => {
-  const blob = new Blob(['﻿', logToCSV([...log].reverse())], { type: 'text/csv;charset=utf-8' });
-  const d = new Date();
+/** Local date-time for file names, e.g. 20261025-1545. */
+function fileStamp(d) {
   const pad = (n) => String(n).padStart(2, '0');
-  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob),
-    download: `safetycam-pelanggaran-${stamp}.csv`,
-  });
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+function downloadBlob(blob, name) {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$('log-csv').addEventListener('click', () => {
+  const blob = new Blob(['﻿', logToCSV([...log].reverse())], { type: 'text/csv;charset=utf-8' });
+  downloadBlob(blob, `safetycam-pelanggaran-${fileStamp(new Date())}.csv`);
 });
 
 $('log-clear').addEventListener('click', () => {
@@ -251,6 +257,50 @@ $('log-clear').addEventListener('click', () => {
   logStore.clear();
   renderLog();
 });
+
+/* ---------- Violation alert (sound + vibration) ---------- */
+
+const SOUND_KEY = 'safetycam.sound';
+let audioCtx = null;
+
+try {
+  $('log-sound').checked = localStorage.getItem(SOUND_KEY) !== 'off';
+} catch {
+  $('log-sound').checked = true;
+}
+$('log-sound').addEventListener('change', (e) => {
+  try { localStorage.setItem(SOUND_KEY, e.target.checked ? 'on' : 'off'); } catch { /* this page only */ }
+  unlockAlert();
+});
+
+/** Browsers only start audio after a click; call this from one. */
+function unlockAlert() {
+  if (!$('log-sound').checked) return;
+  try {
+    audioCtx ??= new AudioContext();
+    audioCtx.resume();
+  } catch { /* no Web Audio: vibration only */ }
+}
+
+/** Two short beeps and a buzz on phones. */
+function alertViolation() {
+  if (!$('log-sound').checked) return;
+  navigator.vibrate?.([200, 100, 200]);
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  for (const start of [t, t + 0.18]) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.2, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.14);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(start);
+    osc.stop(start + 0.15);
+  }
+}
 
 function showError(text) {
   state.lastVerdictKey = '';
@@ -273,9 +323,23 @@ function redrawPhoto() {
   canvas.height = state.raw.srcH;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(state.image, 0, 0);
-  showResult(ctx, dets, assess(dets, { imgH: state.raw.srcH, rules: workerRules, required: state.required }));
+  state.result = assess(dets, { imgH: state.raw.srcH, rules: workerRules, required: state.required });
+  showResult(ctx, dets, state.result);
   $('meta').textContent = `${Math.round(state.raw.ms)} ms · ${detector.backend} · ${dets.length} objek`;
+  $('save-photo').hidden = false;
 }
+
+$('save-photo').addEventListener('click', () => {
+  if (!state.result) return;
+  const now = new Date();
+  const out = withFooter(canvas, {
+    status: state.result.status,
+    title: VERDICT[state.result.status].title,
+    text: summaryText(state.result),
+    stamp: `SafetyCam · ${now.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}`,
+  });
+  out.toBlob((blob) => downloadBlob(blob, `safetycam-${fileStamp(now)}.jpg`), 'image/jpeg', 0.9);
+});
 
 async function runImage(img) {
   $('drop').hidden = true;
@@ -335,6 +399,8 @@ function resetPhoto() {
   $('drop').hidden = false;
   $('file').value = '';
   $('meta').textContent = '';
+  $('save-photo').hidden = true;
+  state.result = null;
   markSample(null);
   setVerdict('verdict--idle', 'Menunggu gambar', 'Pilih foto, contoh, atau webcam untuk mulai.');
   $('breakdown').hidden = true;
@@ -423,20 +489,15 @@ async function startCam() {
   }
   $('cam-start').disabled = true;
   idleText.textContent = 'Meminta izin kamera…';
+  unlockAlert(); // audio may only start from a user gesture, and this is one
   try {
-    const [stream] = await Promise.all([
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }),
-      ensureModel(),
-    ]);
-    state.stream = stream;
-    video.srcObject = stream;
-    await video.play();
+    const [stream] = await Promise.all([openCamera(state.cameraId), ensureModel()]);
+    await useStream(stream);
     $('cam-idle').hidden = true;
     $('cam-stop').hidden = false;
     state.running = true;
-    state.lastVerdictKey = '';
-    tracker.reset();
     loop();
+    fillCameraList();
   } catch (err) {
     stopCam();
     const msg = {
@@ -450,6 +511,44 @@ async function startCam() {
   }
 }
 
+const CAM_SIZE = { width: { ideal: 1280 }, height: { ideal: 720 } };
+
+function openCamera(deviceId) {
+  const constraints = deviceId ? { deviceId: { exact: deviceId }, ...CAM_SIZE } : { facingMode: 'environment', ...CAM_SIZE };
+  return navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
+}
+
+async function useStream(stream) {
+  state.stream?.getTracks().forEach((t) => t.stop());
+  state.stream = stream;
+  state.cameraId = stream.getVideoTracks()[0]?.getSettings().deviceId ?? state.cameraId;
+  video.srcObject = stream;
+  await video.play();
+  state.lastVerdictKey = '';
+  tracker.reset(); // a different view: start numbering workers again
+}
+
+/** Camera picker; only shown when the device has more than one camera. Labels need permission first. */
+async function fillCameraList() {
+  const select = $('cam-select');
+  let cams = [];
+  try {
+    cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+  } catch { /* keep it hidden */ }
+  select.hidden = cams.length < 2;
+  select.replaceChildren(...cams.map((d, i) => new Option(d.label || `Kamera ${i + 1}`, d.deviceId, false, d.deviceId === state.cameraId)));
+}
+
+$('cam-select').addEventListener('change', async (e) => {
+  if (!state.running) return;
+  try {
+    await useStream(await openCamera(e.target.value));
+  } catch (err) {
+    showError(`Kamera itu tidak bisa dibuka: ${err.message}`);
+    e.target.value = state.cameraId;
+  }
+});
+
 function stopCam() {
   state.running = false;
   state.stream?.getTracks().forEach((t) => t.stop());
@@ -459,6 +558,7 @@ function stopCam() {
   $('cam-idle').hidden = false;
   $('cam-idle').querySelector('p').textContent = 'Kamera mati. Tekan tombol untuk menyalakan lagi.';
   $('cam-stop').hidden = true;
+  $('cam-select').hidden = true;
   $('fps').textContent = '-';
 }
 
@@ -477,6 +577,7 @@ async function loop() {
         const { workers, events } = tracker.update(assessed.workers);
         showResult(overlay.getContext('2d'), dets, summarize({ ...assessed, workers }, dets));
         for (const e of events) addLogEntry(e, video);
+        if (events.length) alertViolation(); // one alert per frame, however many workers
 
         frames++;
         const now = performance.now();
@@ -517,6 +618,7 @@ function switchTab(mode) {
   }
   $('samples').hidden = mode !== 'upload';
   $('log').hidden = mode !== 'webcam';
+  $('save-photo').hidden = mode !== 'upload' || !state.result;
   state.lastVerdictKey = '';
   if (mode === 'upload') {
     stopCam();
